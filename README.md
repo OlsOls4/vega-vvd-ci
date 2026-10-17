@@ -35,7 +35,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: "20" }
+        with: { node-version: "22" }   # react-native-kepler 4.x wants Node >= 22.14
 
       - uses: OlsOls4/vega-vvd-ci@main      # KVM + deps + Vega SDK + VVD boot (background)
         with:
