@@ -17,7 +17,7 @@ on:
         required: false
         default: "helloWorld"
   push:
-    branches: [main, vega-vvd-spike]
+    branches: [main]
     paths-ignore: ["**.md", "docs/**"]
 
 concurrency:
