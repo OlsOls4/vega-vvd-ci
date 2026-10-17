@@ -2,7 +2,7 @@
 
 **Build an Amazon Vega OS (Fire TV) React Native app and run it on the Vega Virtual Device (VVD) — headlessly, on a free GitHub-hosted runner — then capture screenshots, a 1080p screen recording and scripted D-pad (remote) input.**
 
-No Docker. No GPU. No self-hosted runner. No Mac. One `ubuntu-24.04` job, about 8 minutes end to end.
+No Docker. No GPU. No self-hosted runner. No Mac. One `ubuntu-24.04` job: **~7 min cold, ~4 min with the SDK cache warm** (install → build → boot → launch → demo → upload).
 
 ![VVD running the Vega hello-world app on a GitHub Actions runner, driven by D-pad presses](docs/contact-sheet.png)
 
@@ -16,7 +16,7 @@ The Vega SDK only installs on x86_64 Ubuntu (20.04/22.04/24.04) or macOS, and th
 
 | Capability | How | Status |
 |---|---|---|
-| Install SDK + VVD unattended | `NONINTERACTIVE=true bash get_vvm.sh` | ✅ ~3.5 min (6.2 GB) |
+| Install SDK + VVD unattended | `NONINTERACTIVE=true bash get_vvm.sh` | ✅ ~3.5 min cold (6.2 GB); ~1 min from `actions/cache` (2.1 GB compressed) |
 | Build a vpkg | `vega project generate` → `npm install` → `npm run build:release` | ✅ ~1 min |
 | Boot VVD headless | Xvfb + Mesa llvmpipe + relaunch the emulator with `-gpu host` | ✅ ~60 s to home screen |
 | Install + launch the app | `vega run-app <vpkg> <appId> -d VirtualDevice` | ✅ ~4 s |
@@ -71,6 +71,15 @@ The action puts `scripts/` on `PATH` and sets `OUT` (artifacts dir) and `DISPLAY
 | `build-app.sh` | Scaffold (template) + build; copies `app-overlay/` over the template if present. |
 | `run-demo.sh` | The demo used by this repo's workflow: launch, walk focus across the tiles, Home, relaunch; step screenshots + recording + slideshow MP4. |
 | `stop-vvd.sh` | Stop the emulator (lets `~/vega` be cached). |
+
+## Measured timings (4 vCPU / 16 GB `ubuntu-24.04` runner)
+
+| Run | SDK | Total job |
+|---|---|---|
+| Cold (no cache) | installed, 207–214 s | 425–478 s |
+| Warm (`~/vega` restored from cache) | 0 s install | 227 s |
+
+Boot to non-black home screen: 54–61 s. App install + launch: 3–4 s. Build (3 arches, release): ~60 s, overlapped with the boot.
 
 ## Run it here
 
