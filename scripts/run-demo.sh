@@ -43,12 +43,12 @@ sleep 12; shot app-launched
 sleep 5;  shot app-settled
 
 echo "::group::D-pad demo"
-"$HERE/press.sh" down;  sleep 1; shot after-down
-"$HERE/press.sh" right; sleep 1; shot after-right
-"$HERE/press.sh" select; sleep 2; shot after-select
-"$HERE/press.sh" home;  sleep 4; shot after-home
-"$HERE/press.sh" right right; sleep 2; shot home-after-right-right
-"$HERE/press.sh" down; sleep 2; shot home-after-down
+"$HERE/press.sh" right; sleep 1; shot focus-get-started
+"$HERE/press.sh" right; sleep 1; shot focus-test-debug
+"$HERE/press.sh" right; sleep 1; shot focus-learn-more
+"$HERE/press.sh" left left left; sleep 1; shot focus-home-again
+"$HERE/press.sh" home;  sleep 4; shot launcher-your-apps
+"$HERE/press.sh" right; sleep 2; shot launcher-after-right
 echo "relaunch app"
 vega device launch-app --appName "$APP_ID" -d VirtualDevice 2>&1 | tee -a "$OUT/logs/run-app.log" || true
 sleep 8; shot app-relaunched

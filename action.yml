@@ -1,0 +1,89 @@
+name: "Vega Virtual Device (VVD) runner"
+description: "Install the Amazon Vega SDK on a GitHub-hosted Ubuntu runner and boot the Vega Virtual Device (Fire TV emulator) headlessly with non-black screenshots, screen recording and remote-key input. No Docker, no GPU."
+author: "OlsOls4"
+branding:
+  icon: "tv"
+  color: "orange"
+inputs:
+  sdk-version:
+    description: "Vega SDK version to install (blank = latest)"
+    default: ""
+  boot:
+    description: "background | foreground | none — when to boot the VVD"
+    default: "background"
+  boot-timeout:
+    description: "Seconds to wait for a non-black home screen"
+    default: "480"
+  cache:
+    description: "Cache ~/vega between runs (true/false)"
+    default: "true"
+  artifacts-dir:
+    description: "Where logs/screenshots go"
+    default: "artifacts"
+outputs:
+  vega-version:
+    description: "Output of vega --version"
+    value: ${{ steps.install.outputs.version }}
+runs:
+  using: composite
+  steps:
+    - name: Enable KVM
+      shell: bash
+      run: |
+        echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+          | sudo tee /etc/udev/rules.d/99-kvm4all.rules >/dev/null
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger --name-match=kvm
+        ls -la /dev/kvm
+    - name: Host dependencies (Xvfb, Mesa llvmpipe, ffmpeg, lz4)
+      shell: bash
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y -qq lz4 jq xvfb x11-utils mesa-utils libgl1 libegl1 \
+          libgl1-mesa-dri libglx-mesa0 libx11-xcb1 libxcb1 ffmpeg iproute2 >/dev/null
+    - name: Restore Vega SDK cache
+      if: inputs.cache == 'true'
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/vega
+          !~/vega/sdk/vega-sdk/main/*/vvd/instances
+        key: vega-sdk-${{ runner.os }}-${{ inputs.sdk-version || 'latest' }}-v2
+    - name: Install Vega SDK (CLI + SDK + VVD)
+      id: install
+      shell: bash
+      env:
+        NONINTERACTIVE: "true"
+        KEPLER_CSAT_DISABLED: "true"
+        VEGA_SDK_VERSION: ${{ inputs.sdk-version }}
+      run: |
+        t0=$SECONDS
+        if [[ ! -x ~/vega/bin/vega ]]; then
+          curl -fsSL https://sdk-installer.vega.labcollab.net/get_vvm.sh -o /tmp/get_vvm.sh
+          for n in 1 2 3; do bash /tmp/get_vvm.sh && break; echo "install attempt $n failed"; sleep 10; done
+        fi
+        echo "$HOME/vega/bin" >> "$GITHUB_PATH"
+        echo "${{ github.action_path }}/scripts" >> "$GITHUB_PATH"
+        {
+          echo "DISPLAY=${DISPLAY:-:99}"
+          echo "KEPLER_CSAT_DISABLED=true"
+          echo "OUT=${OUT:-$GITHUB_WORKSPACE/${{ inputs.artifacts-dir }}}"
+        } >> "$GITHUB_ENV"
+        v=$(~/vega/bin/vega --version | tr '\n' ' '); echo "$v"
+        echo "version=$v" >> "$GITHUB_OUTPUT"
+        echo "Vega SDK ready in $((SECONDS-t0))s"
+    - name: Boot VVD
+      if: inputs.boot != 'none'
+      shell: bash
+      env:
+        VVD_BOOT_TIMEOUT: ${{ inputs.boot-timeout }}
+      run: |
+        mkdir -p "$OUT/logs"
+        if [[ "${{ inputs.boot }}" == "foreground" ]]; then
+          "${{ github.action_path }}/scripts/start-vvd.sh" 2>&1 | tee "$OUT/logs/start-vvd.log"
+          echo "${PIPESTATUS[0]}" > "$OUT/vvd-exit"; test "$(cat "$OUT/vvd-exit")" = 0
+        else
+          nohup bash -c '"$0" > "$OUT/logs/start-vvd.log" 2>&1; echo $? > "$OUT/vvd-exit"' \
+            "${{ github.action_path }}/scripts/start-vvd.sh" >/dev/null 2>&1 &
+          echo "VVD booting in background — run wait-vvd.sh before using it"
+        fi

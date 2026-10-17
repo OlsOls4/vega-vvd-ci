@@ -2,8 +2,8 @@ name: Vega VVD — build, boot, run, record
 
 # Builds a Vega OS (Fire TV) React Native app and runs it on the Vega Virtual
 # Device (VVD) directly on a free GitHub-hosted ubuntu-24.04 runner — no Docker,
-# no GPU, no self-hosted runner. Captures step screenshots, a screen recording
-# and drives the app with D-pad (remote) key presses.
+# no GPU. Captures step screenshots, a 1080p screen recording, and drives the
+# app with D-pad (remote) key presses.
 
 on:
   workflow_dispatch:
@@ -24,97 +24,47 @@ concurrency:
   group: vvd-${{ github.ref }}
   cancel-in-progress: true
 
+defaults:
+  run:
+    shell: bash -eo pipefail {0}
+
 env:
-  DISPLAY: ":99"
-  NONINTERACTIVE: "true"
-  KEPLER_CSAT_DISABLED: "true"
-  VEGA_SDK_VERSION: ${{ github.event.inputs.sdk-version || '' }}
   TEMPLATE: ${{ github.event.inputs.template || 'helloWorld' }}
-  OUT: ${{ github.workspace }}/artifacts
   APP_DIR: app
   APP_NAME: HelloVega
   PACKAGE_ID: com.olsols4.hellovega
-  VVD_WINDOW: "1"
-  VVD_BOOT_TIMEOUT: "480"
 
 jobs:
   vvd:
     runs-on: ubuntu-24.04
-    timeout-minutes: 75
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-
-      - name: Free some disk
-        run: |
-          df -h /
-          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/local/share/boost &
-          mkdir -p "$OUT/logs"; wait; df -h /
-
-      - name: Enable KVM
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
-            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-          ls -la /dev/kvm; nproc; free -h
-
-      - name: Install host dependencies
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq lz4 jq xvfb x11-utils mesa-utils libgl1 libegl1 \
-            libgl1-mesa-dri libglx-mesa0 libx11-xcb1 libxcb1 ffmpeg iproute2 >/dev/null
-          # Native-debugging dep from the install guide; not needed to build/run.
-          (sudo add-apt-repository -y ppa:deadsnakes/ppa >/dev/null 2>&1 && sudo apt-get update -qq && \
-           sudo apt-get install -y -qq libpython3.8-dev >/dev/null && echo "libpython3.8-dev OK") \
-           || echo "::warning::libpython3.8-dev not installable on this runner (only needed for crash symbolication)"
 
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
 
-      - name: Cache Vega SDK
-        uses: actions/cache@v4
+      # Installs the SDK, enables KVM, boots the VVD in the background.
+      - uses: ./
         with:
-          path: ~/vega
-          key: vega-sdk-${{ runner.os }}-${{ env.VEGA_SDK_VERSION || 'latest' }}-v1
-
-      - name: Install Vega SDK (CLI + SDK + VVD)
-        run: |
-          t0=$SECONDS
-          if [[ ! -x ~/vega/bin/vega ]]; then
-            curl -fsSL https://sdk-installer.vega.labcollab.net/get_vvm.sh -o /tmp/get_vvm.sh
-            for n in 1 2 3; do bash /tmp/get_vvm.sh && break; echo "install attempt $n failed"; sleep 10; done
-          fi
-          source ~/vega/env || export PATH="$HOME/vega/bin:$PATH"
-          echo "$HOME/vega/bin" >> "$GITHUB_PATH"
-          vega --version | tee "$OUT/logs/vega-version.txt"
-          vega sdk list-installed || true
-          du -sh ~/vega || true
-          echo "SDK install took $((SECONDS-t0))s"
-
-      - name: Boot VVD in background
-        run: |
-          nohup bash -c 'scripts/start-vvd.sh > "$OUT/logs/start-vvd.log" 2>&1; echo $? > "$OUT/vvd-exit"' >/dev/null 2>&1 &
-          echo "booting VVD in background"
+          sdk-version: ${{ github.event.inputs.sdk-version || '' }}
+          boot: background
 
       - name: Build app (while the VVD boots)
-        run: scripts/build-app.sh 2>&1 | tee "$OUT/logs/build.log"
+        run: build-app.sh 2>&1 | tee "$OUT/logs/build.log"
 
       - name: Wait for VVD
-        run: |
-          for i in $(seq 1 120); do [[ -f "$OUT/vvd-exit" ]] && break; sleep 5; done
-          cat "$OUT/logs/start-vvd.log"
-          test "$(cat "$OUT/vvd-exit" 2>/dev/null)" = "0"
+        run: wait-vvd.sh 600
 
       - name: Run app, D-pad demo, screenshots + recording
-        run: scripts/run-demo.sh 2>&1 | tee "$OUT/logs/run-demo.log"
+        run: run-demo.sh 2>&1 | tee "$OUT/logs/run-demo.log"
 
-      - name: Collect logs
+      - name: Stop VVD
         if: always()
         run: |
           cp -r ~/vega/logs "$OUT/logs/vega-logs" 2>/dev/null || true
-          find ~/.vega ~/vega -maxdepth 4 -name '*.log' -newer /tmp -size -5M 2>/dev/null | head -50 | xargs -r -I{} cp {} "$OUT/logs/" 2>/dev/null || true
-          ls -la ~ ; ls -la "$OUT" "$OUT/logs" || true
+          stop-vvd.sh
 
       - name: Upload artifacts
         if: always()
