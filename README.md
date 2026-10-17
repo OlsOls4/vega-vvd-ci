@@ -8,6 +8,8 @@ No Docker. No GPU. No self-hosted runner. No Mac. One `ubuntu-24.04` job: **~7 m
 
 *Every frame above was captured on a GitHub-hosted runner: VVD home → app launched → D-pad right/left moves focus → Home → launcher.*
 
+▶ **See it used for a real app:** [Cast to Your TV for Fire TV: Ask the TV](https://github.com/OlsOls4/casttoyourtv-firetv) was built, tested and filmed entirely with this action. Demo video (all footage recorded by vega-vvd-ci in GitHub Actions): https://youtu.be/uGa3gNCsfk4
+
 ## Why
 
 The Vega SDK only installs on x86_64 Ubuntu (20.04/22.04/24.04) or macOS, and the VVD needs KVM. That rules out ARM Linux boxes, most cloud dev sandboxes and AI-agent sandboxes. GitHub's Linux runners have KVM, but there's no official "run the VVD in CI" recipe, and the obvious `vega virtual-device start --no-gui` boots a device whose screenshots come back **black**. This repo packages the working recipe as a composite action plus small scripts.
