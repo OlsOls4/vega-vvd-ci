@@ -17,7 +17,7 @@ No Docker. No GPU. No self-hosted runner. No Mac. One `ubuntu-24.04` job: **~7 m
 
 *Step screenshots from the same run: VVD home → app launched → D-pad right/left moves focus → Home → launcher.*
 
-**Used by:** [OlsOls4/casttoyourtv-firetv](https://github.com/OlsOls4/casttoyourtv-firetv) ([`firetv.yml`](https://github.com/OlsOls4/casttoyourtv-firetv/blob/main/.github/workflows/firetv.yml)).
+**Used by:** [OlsOls4/casttoyourtv-firetv](https://github.com/OlsOls4/casttoyourtv-firetv) and a CI fork of Amazon's [vega-video-sample](https://github.com/OlsOls4/vega-video-sample). See [Used by](#used-by).
 
 ▶ **See it used for a real app:** [Cast to Your TV for Fire TV: Ask the TV](https://github.com/OlsOls4/casttoyourtv-firetv) was built, tested and filmed entirely with this action. Demo video (all footage recorded by vega-vvd-ci in GitHub Actions): https://youtu.be/Nm9pIU8Bdcc
 
@@ -90,6 +90,16 @@ Pin `@v1` (moves with compatible fixes) or `@v1.0.0` (exact). Avoid `@main`.
 | `vega-version` | Output of `vega --version`. |
 | `artifacts-dir` | Absolute artifacts path (same as `$OUT`). Handy for `upload-artifact`. |
 | `display` | X display the VVD renders on (same as `$DISPLAY`). |
+
+## Used by
+
+| Repo | What runs | Green run |
+|---|---|---|
+| [OlsOls4/casttoyourtv-firetv](https://github.com/OlsOls4/casttoyourtv-firetv) (Ask the TV, our hackathon app) | [`firetv.yml`](https://github.com/OlsOls4/casttoyourtv-firetv/blob/main/.github/workflows/firetv.yml): unit tests, build, VVD boot, scripted remote-control demo, screenshots + 1080p recordings | [run 39948956038](https://github.com/OlsOls4/casttoyourtv-firetv/actions/runs/39948956038) |
+| [OlsOls4/vega-video-sample](https://github.com/OlsOls4/vega-video-sample) (fork of Amazon's [AmazonAppDev/vega-video-sample](https://github.com/AmazonAppDev/vega-video-sample), which has no CI) | [`vega-vvd-smoke.yml`](https://github.com/OlsOls4/vega-video-sample/blob/main/.github/workflows/vega-vvd-smoke.yml): `npm install` (incl. Shaka Player build), release vpkg, VVD, launch, D-pad to the details page and Play (video frames captured), screenshots + recording, not-blank assertions | [run 39966964283](https://github.com/OlsOls4/vega-video-sample/actions/runs/39966964283) |
+| this repo: [`amazon-sample.yml`](.github/workflows/amazon-sample.yml) | the same smoke test against a pinned commit of Amazon's sample, weekly, so SDK or sample breakage shows up here | [run 39966991966](https://github.com/OlsOls4/vega-vvd-ci/actions/runs/39966991966) |
+
+Both consumer workflows pin `OlsOls4/vega-vvd-ci@v1.0.0`. The drop-in file for Amazon's sample is [`examples/vega-video-sample/vega-vvd-smoke.yml`](examples/vega-video-sample/vega-vvd-smoke.yml).
 
 ## What's new vs finloop/vega-virtual-device-action
 

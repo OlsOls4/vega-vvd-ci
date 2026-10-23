@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased
+- `amazon-sample.yml`: weekly consumer test that builds Amazon's
+  `AmazonAppDev/vega-video-sample` and smoke-tests it on the VVD with `@v1.0.0`;
+  drop-in copy in `examples/vega-video-sample/`. README: "Used by" section.
 - `scripts/contact-sheet.sh` + `release-assets.yml`: attach a verified e2e run's
   contact sheet and recordings to a GitHub Release (assets don't expire).
 
