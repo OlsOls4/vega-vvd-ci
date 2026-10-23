@@ -1,0 +1,118 @@
+name: Amazon vega-video-sample on the VVD
+
+# Consumer test against Amazon's own sample app (AmazonAppDev/vega-video-sample, MIT-0),
+# which ships without CI. Uses the released action exactly as an outside repo would
+# (OlsOls4/vega-vvd-ci@v1.0.0): install the Vega SDK, boot the Vega Virtual Device,
+# build the sample's release vpkg (incl. its Shaka Player postinstall), run it on the
+# VVD, drive it with D-pad presses, and upload screenshots + a screen recording.
+# The same job, with a plain `actions/checkout@v4`, is the drop-in workflow proposed
+# for the sample repo itself: examples/vega-video-sample/vega-vvd-smoke.yml
+
+on:
+  push:
+    branches: [main, amazon-sample-ci]
+    paths: [".github/workflows/amazon-sample.yml"]
+  workflow_dispatch:
+    inputs:
+      sample-ref:
+        description: "Commit/branch of AmazonAppDev/vega-video-sample"
+        required: false
+        default: ""
+  # Weekly, so a breaking change in the sample or the SDK shows up (Mondays 07:23 UTC).
+  schedule:
+    - cron: "23 7 * * 1"
+
+concurrency:
+  group: amazon-sample-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash -eo pipefail {0}
+
+env:
+  PACKAGE_ID: com.amazondeveloper.keplervideoapp
+  APP_ID: com.amazondeveloper.keplervideoapp.main
+
+jobs:
+  vvd-smoke:
+    runs-on: ubuntu-24.04          # x86_64 with KVM; no Docker, no GPU
+    timeout-minutes: 75
+    steps:
+      - name: Check out AmazonAppDev/vega-video-sample
+        uses: actions/checkout@v4
+        with:
+          repository: AmazonAppDev/vega-video-sample
+          ref: ${{ github.event.inputs.sample-ref || 'ef8e4da89b22ef7973d0d41beedfa2b42f7bb272' }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"       # package.json engines: node >= 22
+
+      # Installs the Vega SDK (cached), enables KVM, boots the VVD in the background.
+      - id: vvd
+        uses: OlsOls4/vega-vvd-ci@v1.0.0
+        with:
+          boot: background
+
+      - name: npm install (runs the Shaka Player postinstall build)
+        run: |
+          mkdir -p "$OUT/logs"
+          npm install --no-audit --no-fund 2>&1 | tee "$OUT/logs/npm-install.log"
+
+      - name: Build release vpkg (while the VVD boots)
+        run: |
+          npm run build:release 2>&1 | tee "$OUT/logs/build.log"
+          find build -name '*.vpkg' -exec ls -la {} \; | tee "$OUT/logs/vpkgs.txt"
+          VPKG=$(find "$PWD/build" -name '*x86_64*.vpkg' | grep -i release | head -1)
+          test -n "$VPKG" || { echo "::error::no x86_64 release vpkg"; exit 1; }
+          echo "VPKG=$VPKG" >> "$GITHUB_ENV"
+          cp "$VPKG" "$OUT/"
+
+      - name: Wait for VVD
+        run: wait-vvd.sh 600
+
+      - name: Run app, D-pad, screenshots + recording
+        run: |
+          mkdir -p "$OUT/shots"; n=0
+          shot() { n=$((n+1)); screenshot.sh "$(printf '%s/shots/%02d-%s.png' "$OUT" "$n" "$1")" || echo "shot $1 failed"; }
+          enable-devmode.sh 2>&1 | tee "$OUT/logs/devmode.log"   # inputd-cli needs developer mode
+          shot launcher
+          record.sh start "$OUT/demo.webm"
+          vega run-app "$VPKG" "$APP_ID" -d VirtualDevice 2>&1 | tee "$OUT/logs/run-app.log"
+          sleep 20; shot app-launched
+          press.sh down;  sleep 2; shot dpad-down
+          press.sh right; sleep 2; shot dpad-right
+          press.sh right; sleep 2; shot dpad-right-2
+          press.sh select; sleep 6; shot dpad-select
+          press.sh select; sleep 10; shot dpad-select-2
+          press.sh back;  sleep 3; shot dpad-back
+          vega device running-apps -d VirtualDevice 2>&1 | tee "$OUT/logs/running-apps.txt" || true
+          record.sh stop
+          ffmpeg -y -loglevel error -i "$OUT/demo.webm" -c:v libx264 -pix_fmt yuv420p -movflags +faststart "$OUT/demo.mp4" || true
+          ls -la "$OUT" "$OUT/shots"
+
+      - name: Smoke assertions (app running, frames not black)
+        run: |
+          grep -q "$PACKAGE_ID" "$OUT/logs/running-apps.txt" || { echo "::error::$PACKAGE_ID is not running on the VVD"; exit 1; }
+          for f in "$OUT"/shots/*app-launched*.png "$OUT"/shots/*dpad-select-2*.png; do
+            mean=$(ffmpeg -v error -i "$f" -vf "format=gray,signalstats,metadata=print:key=lavfi.signalstats.YAVG:file=-" -f null - | grep -o 'YAVG=[0-9.]*' | cut -d= -f2)
+            echo "$(basename "$f") mean luma $mean"
+            awk -v m="$mean" 'BEGIN{exit !(m>8)}' || { echo "::error::$(basename "$f") is black"; exit 1; }
+          done
+          test -s "$OUT/demo.mp4" && echo "recording $(du -h "$OUT/demo.mp4" | cut -f1)"
+
+      - name: Stop VVD
+        if: always()
+        run: |
+          cp -r ~/vega/logs "$OUT/logs/vega-logs" 2>/dev/null || true
+          stop-vvd.sh
+
+      - name: Upload screenshots + recording
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vega-video-sample-vvd
+          path: ${{ steps.vvd.outputs.artifacts-dir }}
+          if-no-files-found: warn
+          retention-days: 30
