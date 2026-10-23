@@ -87,9 +87,9 @@ jobs:
           press.sh down;  sleep 2; shot dpad-down
           press.sh right; sleep 2; shot dpad-right
           press.sh right; sleep 2; shot dpad-right-2
-          press.sh select; sleep 6; shot dpad-select
-          press.sh select; sleep 10; shot dpad-select-2
-          press.sh back;  sleep 3; shot dpad-back
+          press.sh select; sleep 6; shot details-page        # title details: Play Movie focused
+          press.sh select; sleep 20; shot player          # Play Movie (MP4 over the network)
+          press.sh back;  sleep 4; shot back-to-details
           vega device running-apps -d VirtualDevice 2>&1 | tee "$OUT/logs/running-apps.txt" || true
           record.sh stop
           ffmpeg -y -loglevel error -i "$OUT/demo.webm" -c:v libx264 -pix_fmt yuv420p -movflags +faststart "$OUT/demo.mp4" || true
@@ -98,7 +98,12 @@ jobs:
       - name: Smoke assertions (app running, frames not black)
         run: |
           grep -q "$PACKAGE_ID" "$OUT/logs/running-apps.txt" || { echo "::error::$PACKAGE_ID is not running on the VVD"; exit 1; }
-          for f in "$OUT"/shots/*app-launched*.png "$OUT"/shots/*dpad-select-2*.png; do
+          # The player frame is reported but not asserted: the video surface can render black
+          # in a headless VVD screenshot while the stream buffers.
+          for f in "$OUT"/shots/*player*.png; do
+            ffmpeg -v error -i "$f" -vf "format=gray,signalstats,metadata=print:key=lavfi.signalstats.YAVG:file=-" -f null - | grep -o 'YAVG=[0-9.]*' | sed "s|^|$(basename "$f") |" || true
+          done
+          for f in "$OUT"/shots/*app-launched*.png "$OUT"/shots/*details-page*.png "$OUT"/shots/*back-to-details*.png; do
             mean=$(ffmpeg -v error -i "$f" -vf "format=gray,signalstats,metadata=print:key=lavfi.signalstats.YAVG:file=-" -f null - | grep -o 'YAVG=[0-9.]*' | cut -d= -f2)
             echo "$(basename "$f") mean luma $mean"
             awk -v m="$mean" 'BEGIN{exit !(m>8)}' || { echo "::error::$(basename "$f") is black"; exit 1; }
