@@ -58,6 +58,9 @@ jobs:
       - name: npm install (runs the Shaka Player postinstall build)
         run: |
           mkdir -p "$OUT/logs"
+          # shaka-setup/build.sh applies Vega patches with `git am`, which needs a committer identity
+          git config --global user.name  "ci"
+          git config --global user.email "ci@users.noreply.github.com"
           npm install --no-audit --no-fund 2>&1 | tee "$OUT/logs/npm-install.log"
 
       - name: Build release vpkg (while the VVD boots)
