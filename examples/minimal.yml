@@ -1,0 +1,46 @@
+# Minimal consumer workflow: copy to .github/workflows/vvd.yml in your Vega app repo.
+# Builds your app, boots the Vega Virtual Device on a free GitHub runner, launches
+# the app, presses some remote keys, and uploads a screenshot + screen recording.
+name: vvd
+on: [push, workflow_dispatch]
+
+jobs:
+  vvd:
+    runs-on: ubuntu-24.04          # x86_64 with KVM; no Docker, no GPU needed
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash -eo pipefail {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"       # react-native-kepler 4.x wants Node >= 22.14
+
+      - id: vvd
+        uses: OlsOls4/vega-vvd-ci@v1
+        with:
+          sdk-version: "0.24.12112"   # pin for reproducible runs; blank = latest
+          boot: background             # boots while the next step builds
+
+      - run: npm ci && npm run build:release
+
+      - run: wait-vvd.sh 600
+
+      - name: Launch, drive, capture
+        run: |
+          vega run-app build/x86_64-release/myapp_x86_64.vpkg com.example.myapp.main -d VirtualDevice
+          record.sh start "$OUT/demo.webm"
+          sleep 10; screenshot.sh "$OUT/launched.png"
+          press.sh right right select back
+          record.sh stop
+          ffmpeg -y -loglevel error -i "$OUT/demo.webm" -c:v libx264 -pix_fmt yuv420p "$OUT/demo.mp4"
+
+      - if: always()
+        run: stop-vvd.sh
+
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vvd
+          path: ${{ steps.vvd.outputs.artifacts-dir }}

@@ -22,7 +22,7 @@ jobs:
       - name: actionlint
         run: |
           bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7
-          ./actionlint -color .github/workflows/*.yml
+          ./actionlint -color .github/workflows/*.yml examples/*.yml
       - name: python syntax
         run: python3 -m py_compile scripts/vvd-console.py
 
