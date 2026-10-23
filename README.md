@@ -19,7 +19,7 @@ No Docker. No GPU. No self-hosted runner. No Mac. One `ubuntu-24.04` job: **~7 m
 
 **Used by:** [OlsOls4/casttoyourtv-firetv](https://github.com/OlsOls4/casttoyourtv-firetv) ([`firetv.yml`](https://github.com/OlsOls4/casttoyourtv-firetv/blob/main/.github/workflows/firetv.yml)).
 
-▶ **See it used for a real app:** [Cast to Your TV for Fire TV: Ask the TV](https://github.com/OlsOls4/casttoyourtv-firetv) was built, tested and filmed entirely with this action. Demo video (all footage recorded by vega-vvd-ci in GitHub Actions): https://youtu.be/g30fh212Bm0
+▶ **See it used for a real app:** [Cast to Your TV for Fire TV: Ask the TV](https://github.com/OlsOls4/casttoyourtv-firetv) was built, tested and filmed entirely with this action. Demo video (all footage recorded by vega-vvd-ci in GitHub Actions): https://youtu.be/jQjg995EgmY
 
 ## Why
 
