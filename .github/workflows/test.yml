@@ -34,7 +34,8 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install pytest==8.3.3
-      - name: pytest (press.sh, wait-vvd.sh, screenshot.sh, vvd-console.py, vvd-kill.sh, validate-inputs.sh)
+      - run: sudo apt-get install -y -qq ffmpeg >/dev/null   # for the contact-sheet test
+      - name: pytest (press, wait, screenshot, console, kill, inputs, contact sheet)
         run: python -m pytest -v tests
 
   action-rejects-bad-input:

@@ -102,7 +102,7 @@ Pin `@v1` (moves with compatible fixes) or `@v1.0.0` (exact). Avoid `@main`.
 | Screen recording | ✅ `record.sh` → WebM → MP4, full-motion 1080p | Screenshot (`screenshot-path`) |
 | Remote / D-pad input | ✅ `press.sh right select back …`, no extra deps (on-device `inputd-cli`) | Via Argent or Appium examples |
 | SDK caching | `~/vega` via `actions/cache`, ~1 min restore, version-keyed | Docker build cache |
-| Unit tests | ✅ shellcheck + actionlint + 54 pytest cases on every push, plus e2e | e2e smoke/navigation workflows |
+| Unit tests | ✅ shellcheck + actionlint + 56 pytest cases on every push, plus e2e | e2e smoke/navigation workflows |
 | Versioned release | ✅ `@v1` / `@v1.0.0` | `@main` in its quick start |
 | Tested on | ubuntu-24.04, Node 22, SDK 0.24.12112 / CLI 1.4.5 + 1.4.7 | ubuntu-22.04 quick start, Node 20 image |
 
@@ -123,6 +123,7 @@ Pick finloop's if you want a self-contained container image or Argent/Appium nav
 | `stop-vvd.sh` | Stop the emulator (lets `~/vega` be cached). |
 | `vvd-kill.sh <cli-pid> [emu-pid]` | Used by `start-vvd.sh`: kills only the CLI's own process tree/session and the emulator, never unrelated `node`/npm processes. |
 | `validate-inputs.sh` | Used by `action.yml`: validates inputs, derives the outputs and cache key. |
+| `contact-sheet.sh out.png shot.png …` | Tile step screenshots into one labelled PNG (needs ffmpeg). |
 
 ## Tests
 
@@ -135,8 +136,11 @@ Two workflows run on every push:
   - `vvd-console.py`: auth-token handshake, OK/KO parsing, bad token, no-auth console.
   - `vvd-kill.sh`: **regression test** for the v0 `pkill -9 -x node` bug: the CLI's tree and session die, an unrelated process named `node` survives, the caller's session is never swept.
   - `validate-inputs.sh`: bad `boot`/`boot-timeout`/`cache`/`sdk-version` fail with an annotation; outputs and cache key.
+  - `contact-sheet.sh`: tiles screenshots into one PNG.
   - It also runs the action with `boot: backgorund` (a typo) and checks it fails fast.
 - **[`vvd.yml`](.github/workflows/vvd.yml)** (~4–8 min, end to end): install, build, boot, launch, D-pad demo, screenshots + recording, with a `node` canary process that must survive the boot. Also runs **weekly** (Monday 06:17 UTC) against the latest SDK.
+
+**[`release-assets.yml`](.github/workflows/release-assets.yml)** (manual) copies a verified e2e run's screenshots (as a contact sheet) and recordings onto a GitHub Release, so the evidence outlives the 14-day artifact retention.
 
 Run the unit tests locally: `pip install pytest && python -m pytest tests` (Linux; no SDK needed).
 

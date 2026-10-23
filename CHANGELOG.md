@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+- `scripts/contact-sheet.sh` + `release-assets.yml`: attach a verified e2e run's
+  contact sheet and recordings to a GitHub Release (assets don't expire).
+
 ## v1.0.0 (2026-10-23)
 
 First versioned release. Use `OlsOls4/vega-vvd-ci@v1`.

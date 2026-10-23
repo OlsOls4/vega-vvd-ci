@@ -1,0 +1,51 @@
+name: release-assets
+
+# Attach evidence from an end-to-end run to a GitHub Release, so it outlives the
+# 14-day artifact retention: a labelled contact sheet of the step screenshots,
+# the full-motion demo recording, and the step slideshow.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to attach to (e.g. v1.0.0)"
+        required: true
+      run-id:
+        description: "ID of a successful 'Vega VVD — build, boot, run, record' run"
+        required: true
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  attach:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: vvd-artifacts
+          path: vvd
+          run-id: ${{ inputs.run-id }}
+          github-token: ${{ github.token }}
+      - name: Build assets
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          sudo apt-get install -y -qq ffmpeg fonts-dejavu-core >/dev/null
+          mkdir -p dist
+          shots=()
+          for s in 01-home-before-launch 02-app-launched 04-focus-get-started 05-focus-test-debug \
+                   06-focus-learn-more 07-focus-home-again 08-launcher-your-apps 09-launcher-after-right; do
+            [[ -f "vvd/shots/$s.png" ]] && shots+=("vvd/shots/$s.png")
+          done
+          scripts/contact-sheet.sh "dist/vega-vvd-ci-$TAG-contact-sheet.png" "${shots[@]}"
+          cp vvd/demo-console.mp4   "dist/vega-vvd-ci-$TAG-demo.mp4"
+          cp vvd/demo-slideshow.mp4 "dist/vega-vvd-ci-$TAG-step-slideshow.mp4"
+          ls -la dist
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: gh release upload "$TAG" dist/* --clobber --repo "$GITHUB_REPOSITORY"
