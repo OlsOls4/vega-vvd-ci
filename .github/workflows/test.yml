@@ -1,0 +1,54 @@
+name: test
+
+# Fast checks with no emulator and no Vega SDK (< 1 min): lint every script and
+# workflow, unit-test the helper scripts against a stub `vega` CLI and a fake
+# emulator console, and check that the action rejects bad inputs.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck
+        run: shellcheck --version && shellcheck scripts/*.sh
+      - name: actionlint
+        run: |
+          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7
+          ./actionlint -color .github/workflows/*.yml
+      - name: python syntax
+        run: python3 -m py_compile scripts/vvd-console.py
+
+  unit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pytest==8.3.3
+      - name: pytest (press.sh, wait-vvd.sh, screenshot.sh, vvd-console.py, vvd-kill.sh, validate-inputs.sh)
+        run: python -m pytest -v tests
+
+  action-rejects-bad-input:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - id: bad
+        uses: ./
+        continue-on-error: true
+        with:
+          boot: backgorund   # typo on purpose
+      - name: Expect the action to fail fast on the typo
+        env:
+          OUTCOME: ${{ steps.bad.outcome }}
+        run: |
+          echo "outcome=$OUTCOME"
+          test "$OUTCOME" = failure

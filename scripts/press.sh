@@ -6,15 +6,29 @@
 #        or any raw Linux KEY_* code.
 set -uo pipefail
 GAP=${PRESS_GAP:-0.6}
-for k in "$@"; do
-  case "$k" in
-    up) c=KEY_UP;; down) c=KEY_DOWN;; left) c=KEY_LEFT;; right) c=KEY_RIGHT;;
-    select|ok|enter) c=KEY_ENTER;; back) c=KEY_BACK;; home) c=KEY_HOMEPAGE;;
-    menu) c=KEY_MENU;; playpause) c=KEY_PLAYPAUSE;; rewind) c=KEY_REWIND;;
-    fastforward|ff) c=KEY_FASTFORWARD;; KEY_*) c=$k;;
-    *) echo "unknown key $k" >&2; exit 2;;
+[[ $# -ge 1 ]] || { echo "usage: press.sh <key> [key ...]" >&2; exit 2; }
+keycode() {
+  case "$1" in
+    up) echo KEY_UP;; down) echo KEY_DOWN;; left) echo KEY_LEFT;; right) echo KEY_RIGHT;;
+    select|ok|enter) echo KEY_ENTER;; back) echo KEY_BACK;; home) echo KEY_HOMEPAGE;;
+    menu) echo KEY_MENU;; playpause) echo KEY_PLAYPAUSE;; rewind) echo KEY_REWIND;;
+    fastforward|ff) echo KEY_FASTFORWARD;;
+    KEY_*) [[ "$1" =~ ^KEY_[A-Z0-9_]+$ ]] && echo "$1" || return 1;;
+    *) return 1;;
   esac
+}
+# Validate every key before pressing anything.
+codes=()
+for k in "$@"; do
+  c=$(keycode "$k") || { echo "unknown key $k" >&2; exit 2; }
+  codes+=("$c")
+done
+fail=0
+for i in "${!codes[@]}"; do
+  k=${*:i+1:1}; c=${codes[$i]}
   out=$(vega exec vda shell inputd-cli button_press "$c" 2>&1); rc=$?
   echo "press $k ($c) rc=$rc ${out:0:200}"
+  [[ $rc -eq 0 ]] || fail=1
   sleep "$GAP"
 done
+exit "$fail"

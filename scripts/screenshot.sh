@@ -6,8 +6,8 @@ OUT_PNG="${1:?usage: screenshot.sh <out.png>}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 tmp="$(mktemp -d)"
 python3 "$HERE/vvd-console.py" "screenrecord screenshot $tmp" >/dev/null
-for _ in 1 2 3 4 5 6 7 8 9 10; do
-  shot="$(ls -t "$tmp"/*.png 2>/dev/null | head -1 || true)"
+for _ in $(seq 1 "${SHOT_TRIES:-10}"); do
+  shot="$(find "$tmp" -maxdepth 1 -name '*.png' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2- || true)"
   [[ -n "$shot" ]] && break; sleep 0.5
 done
 [[ -z "${shot:-}" ]] && { echo "no screenshot produced" >&2; rm -rf "$tmp"; exit 1; }

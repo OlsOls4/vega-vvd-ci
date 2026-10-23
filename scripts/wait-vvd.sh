@@ -3,6 +3,11 @@
 set -uo pipefail
 OUT=${OUT:-$PWD/artifacts}
 T=${1:-600}
-for _ in $(seq 1 $((T/5))); do [[ -f "$OUT/vvd-exit" ]] && break; sleep 5; done
+POLL=${VVD_WAIT_POLL:-5}
+[[ "$T" =~ ^[0-9]+$ ]] || { echo "usage: wait-vvd.sh [timeout-seconds]" >&2; exit 2; }
+deadline=$((SECONDS + T))
+until [[ -f "$OUT/vvd-exit" ]] || [[ $SECONDS -ge $deadline ]]; do sleep "$POLL"; done
 cat "$OUT/logs/start-vvd.log" 2>/dev/null
-[[ "$(cat "$OUT/vvd-exit" 2>/dev/null)" == "0" ]] || { echo "VVD failed to boot"; exit 1; }
+[[ -f "$OUT/vvd-exit" ]] || { echo "VVD boot did not finish within ${T}s"; exit 1; }
+[[ "$(cat "$OUT/vvd-exit")" == "0" ]] || { echo "VVD failed to boot (start-vvd.sh exit $(cat "$OUT/vvd-exit"))"; exit 1; }
+echo "VVD ready"

@@ -18,7 +18,11 @@ on:
         default: "helloWorld"
   push:
     branches: [main]
-    paths-ignore: ["**.md", "docs/**"]
+    paths-ignore: ["**.md", "docs/**", "tests/**", "examples/**"]
+  # Weekly end-to-end run against the latest Vega SDK, so the badge shows the
+  # recipe still works (Mondays 06:17 UTC).
+  schedule:
+    - cron: "17 6 * * 1"
 
 concurrency:
   group: vvd-${{ github.ref }}
@@ -45,17 +49,42 @@ jobs:
         with:
           node-version: "22"
 
+      # Regression canary for the v0 `pkill -9 -x node` bug: an unrelated `node`
+      # process (like a concurrent npm build) must survive the VVD boot.
+      - name: Start unrelated node canary
+        run: |
+          nohup node -e 'setInterval(() => {}, 1 << 30)' >/dev/null 2>&1 &
+          echo $! > /tmp/node-canary.pid
+          echo "canary pid $(cat /tmp/node-canary.pid)"
+
       # Installs the SDK, enables KVM, boots the VVD in the background.
-      - uses: ./
+      - id: vvd
+        uses: ./
         with:
           sdk-version: ${{ github.event.inputs.sdk-version || '' }}
           boot: background
+
+      - name: Action outputs
+        env:
+          V: ${{ steps.vvd.outputs.vega-version }}
+          A: ${{ steps.vvd.outputs.artifacts-dir }}
+          D: ${{ steps.vvd.outputs.display }}
+        run: |
+          echo "vega-version=$V"; echo "artifacts-dir=$A"; echo "display=$D"
+          test -n "$A" && test "$A" = "$OUT" && test -n "$D"
 
       - name: Build app (while the VVD boots)
         run: build-app.sh 2>&1 | tee "$OUT/logs/build.log"
 
       - name: Wait for VVD
         run: wait-vvd.sh 600
+
+      - name: Canary survived the boot
+        run: |
+          pid=$(cat /tmp/node-canary.pid)
+          if kill -0 "$pid" 2>/dev/null; then echo "node canary $pid still alive"; else
+            echo "::error::start-vvd.sh killed an unrelated node process"; exit 1; fi
+          kill "$pid"
 
       - name: Run app, D-pad demo, screenshots + recording
         run: run-demo.sh 2>&1 | tee "$OUT/logs/run-demo.log"

@@ -46,7 +46,11 @@ vega virtual-device start --help >"$OUT/logs/vvd-start-help.txt" 2>&1 || true
 START_ARGS=(--gui=false --gl-accel=true)
 grep -q -- "--no-gui" "$OUT/logs/vvd-start-help.txt" && ! grep -q -- "--gui" "$OUT/logs/vvd-start-help.txt" && START_ARGS=(--no-gui)
 log "phase 1: vega virtual-device start ${START_ARGS[*]}"
-nohup vega virtual-device start "${START_ARGS[@]}" --timeout "$TIMEOUT" >"$OUT/logs/vvd-cli-phase1.log" 2>&1 &
+# setsid: the CLI leads its own session, so phase 2 can kill exactly its process
+# group/session instead of every `node` on the runner.
+setsid vega virtual-device start "${START_ARGS[@]}" --timeout "$TIMEOUT" >"$OUT/logs/vvd-cli-phase1.log" 2>&1 < /dev/null &
+cli_pid=$!
+log "phase 1 CLI pid $cli_pid"
 
 emu_pid=""
 for _ in $(seq 1 300); do
@@ -73,11 +77,15 @@ fi
 
 # --- phase 2: relaunch with -gpu host -----------------------------------------
 log "phase 2: relaunch with -gpu host (llvmpipe)"
-pkill -9 -f "virtual-device start" 2>/dev/null || true
-pkill -9 virtualdevice 2>/dev/null || true
-pkill -9 -x node 2>/dev/null || true
-pkill -9 -x vega-virtual-de 2>/dev/null || true
-sleep 3
+ps -eo pid,ppid,sid,pgid,comm,args >"$OUT/logs/ps-before-phase2.txt" 2>&1 || true
+# Kill only the CLI's own tree/session + the emulator it started (never `pkill node`:
+# that would also kill a concurrent `npm ci` / `npm run build`).
+"$HERE/vvd-kill.sh" "$cli_pid" "$emu_pid"
+for _ in $(seq 1 20); do kill -0 "$emu_pid" 2>/dev/null || break; sleep 0.5; done
+pkill -9 -x vega-virtual-de 2>/dev/null || true   # emulator binary only (15-char comm)
+wait "$cli_pid" 2>/dev/null || true
+sleep 2
+ps -eo pid,ppid,sid,pgid,comm,args >"$OUT/logs/ps-after-phase2-kill.txt" 2>&1 || true
 rm -f /tmp/qmp-socket-*.sock
 export LD_LIBRARY_PATH="${AGENT_DIR}/lib64/libstdc++:${AGENT_DIR}/lib64/gles_swiftshader:${AGENT_DIR}/lib64:${LD_LIBRARY_PATH:-}"
 setsid "$EMU_BIN" -gpu host "${EMU_ARGS[@]}" >"$OUT/logs/emulator.log" 2>&1 < /dev/null &

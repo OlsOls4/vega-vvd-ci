@@ -6,27 +6,48 @@ branding:
   color: "orange"
 inputs:
   sdk-version:
-    description: "Vega SDK version to install (blank = latest)"
+    description: "Vega SDK version to install, e.g. 0.24.12112 (blank = latest)"
+    required: false
     default: ""
   boot:
     description: "background | foreground | none — when to boot the VVD"
+    required: false
     default: "background"
   boot-timeout:
     description: "Seconds to wait for a non-black home screen"
+    required: false
     default: "480"
   cache:
     description: "Cache ~/vega between runs (true/false)"
+    required: false
     default: "true"
   artifacts-dir:
-    description: "Where logs/screenshots go"
+    description: "Where logs/screenshots go (relative to the workspace, or absolute)"
+    required: false
     default: "artifacts"
 outputs:
   vega-version:
     description: "Output of vega --version"
     value: ${{ steps.install.outputs.version }}
+  artifacts-dir:
+    description: "Absolute path of the artifacts dir (also exported as $OUT)"
+    value: ${{ steps.validate.outputs.out }}
+  display:
+    description: "X display the VVD renders on (also exported as $DISPLAY)"
+    value: ${{ steps.validate.outputs.display }}
 runs:
   using: composite
   steps:
+    - name: Validate inputs
+      id: validate
+      shell: bash
+      env:
+        IN_BOOT: ${{ inputs.boot }}
+        IN_TIMEOUT: ${{ inputs.boot-timeout }}
+        IN_CACHE: ${{ inputs.cache }}
+        IN_SDK: ${{ inputs.sdk-version }}
+        IN_OUT: ${{ inputs.artifacts-dir }}
+      run: bash "${{ github.action_path }}/scripts/validate-inputs.sh"
     - name: Enable KVM
       shell: bash
       run: |
@@ -48,7 +69,8 @@ runs:
         path: |
           ~/vega
           !~/vega/sdk/vega-sdk/main/*/vvd/instances
-        key: vega-sdk-${{ runner.os }}-${{ inputs.sdk-version || 'latest' }}-v2
+        # "latest" is bucketed by month so a new SDK release is picked up within a month.
+        key: vega-sdk-${{ runner.os }}-${{ steps.validate.outputs.sdk-key }}-v3
     - name: Install Vega SDK (CLI + SDK + VVD)
       id: install
       shell: bash
@@ -65,9 +87,9 @@ runs:
         echo "$HOME/vega/bin" >> "$GITHUB_PATH"
         echo "${{ github.action_path }}/scripts" >> "$GITHUB_PATH"
         {
-          echo "DISPLAY=${DISPLAY:-:99}"
+          echo "DISPLAY=${{ steps.validate.outputs.display }}"
           echo "KEPLER_CSAT_DISABLED=true"
-          echo "OUT=${OUT:-$GITHUB_WORKSPACE/${{ inputs.artifacts-dir }}}"
+          echo "OUT=${{ steps.validate.outputs.out }}"
         } >> "$GITHUB_ENV"
         v=$(~/vega/bin/vega --version | tr '\n' ' '); echo "$v"
         echo "version=$v" >> "$GITHUB_OUTPUT"
@@ -77,6 +99,7 @@ runs:
       shell: bash
       env:
         VVD_BOOT_TIMEOUT: ${{ inputs.boot-timeout }}
+        VVD_DISPLAY: ${{ steps.validate.outputs.display }}
       run: |
         mkdir -p "$OUT/logs"
         if [[ "${{ inputs.boot }}" == "foreground" ]]; then
