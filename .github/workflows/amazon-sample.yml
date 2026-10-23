@@ -92,7 +92,8 @@ jobs:
           press.sh back;  sleep 4; shot back-to-details
           vega device running-apps -d VirtualDevice 2>&1 | tee "$OUT/logs/running-apps.txt" || true
           record.sh stop
-          ffmpeg -y -loglevel error -i "$OUT/demo.webm" -c:v libx264 -pix_fmt yuv420p -movflags +faststart "$OUT/demo.mp4" || true
+          ffmpeg -y -loglevel error -i "$OUT/demo.webm" -c:v libx264 -pix_fmt yuv420p -movflags +faststart "$OUT/demo.mp4" \
+            && rm -f "$OUT/demo.webm"    # keep the artifact small (the raw webm is ~130 MB)
           ls -la "$OUT" "$OUT/shots"
 
       - name: Smoke assertions (app running, frames not black)
